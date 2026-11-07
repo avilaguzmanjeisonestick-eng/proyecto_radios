@@ -4,12 +4,13 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit,
 from PySide6.QtCore import Qt
 from database import SessionLocal
 from models import Usuario
+from security import verificar_password
 
 class LoginWindow(QWidget):
     def __init__(self, on_login_success):
         super().__init__()
         self.on_login_success = on_login_success
-        self.setWindowTitle("SECURADIO - Login")
+        self.setWindowTitle("CENTINELA - Login")
         self.resize(1024, 768)
         self.setObjectName("login_bg")
 
@@ -59,7 +60,8 @@ class LoginWindow(QWidget):
         db = SessionLocal()
         try:
             user = db.query(Usuario).filter(Usuario.username == username).first()
-            if user and user.password_hash == password:
+            # Usamos la función de seguridad para verificar
+            if user and verificar_password(password, user.password_hash):
                 if user.activo:
                     self.on_login_success(user)
                     self.close()

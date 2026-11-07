@@ -32,16 +32,20 @@ class DashboardPage(QWidget):
         header_layout.addLayout(welcome_layout)
         header_layout.addStretch()
 
-        btn_devolucion = QPushButton("↺ Registrar Devolución")
-        btn_devolucion.setStyleSheet("padding: 10px 15px; border: 1px solid #d5dbe5; border-radius: 4px; background: white; font-weight: bold; color: #172033;")
-        btn_devolucion.clicked.connect(lambda: self.navigate_to(3, "Registrar devolución", "btn_devolucion"))
-        
-        btn_entrega = QPushButton("+ Nueva Entrega")
-        btn_entrega.setStyleSheet("padding: 10px 15px; border-radius: 4px; background: #003087; color: white; font-weight: bold;")
-        btn_entrega.clicked.connect(lambda: self.navigate_to(2, "Registrar nueva entrega", "btn_entrega"))
+        # --- RESTRICCIÓN DE ROLES EN EL DASHBOARD ---
+        # El técnico no hace entregas ni devoluciones
+        if self.usuario_actual.rol in ['Operativo', 'Admin']:
+            btn_devolucion = QPushButton("↺ Registrar Devolución")
+            btn_devolucion.setStyleSheet("padding: 10px 15px; border: 1px solid #d5dbe5; border-radius: 4px; background: white; font-weight: bold; color: #172033;")
+            btn_devolucion.clicked.connect(lambda: self.navigate_to(3, "Registrar devolución", "btn_devolucion"))
+            
+            btn_entrega = QPushButton("+ Nueva Entrega")
+            btn_entrega.setStyleSheet("padding: 10px 15px; border-radius: 4px; background: #003087; color: white; font-weight: bold;")
+            btn_entrega.clicked.connect(lambda: self.navigate_to(2, "Registrar nueva entrega", "btn_entrega"))
 
-        header_layout.addWidget(btn_devolucion)
-        header_layout.addWidget(btn_entrega)
+            header_layout.addWidget(btn_devolucion)
+            header_layout.addWidget(btn_entrega)
+            
         layout.addLayout(header_layout)
 
         self.cards_layout = QHBoxLayout()
@@ -144,7 +148,7 @@ class DashboardPage(QWidget):
                 self.tabla.setItem(row_idx, 3, QTableWidgetItem(ent.fecha_hora.strftime('%d/%m/%Y - %H:%M')))
                 
                 btn_ver = QPushButton("👁")
-                btn_ver.setStyleSheet("background: transparent; border: none; font-size: 18px; color: #003087;") # SIN cursor: pointer
+                btn_ver.setStyleSheet("background: transparent; border: none; font-size: 18px; color: #003087;")
                 btn_ver.clicked.connect(lambda checked=False, entrega_id=ent.id: self.mostrar_resumen(entrega_id))
                 self.tabla.setCellWidget(row_idx, 4, btn_ver)
                 

@@ -1,15 +1,17 @@
 # ui/history_page.py
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, 
-                               QHeaderView)
+                               QHeaderView, QMessageBox)
 from PySide6.QtCore import Qt
 from database import SessionLocal
 from models import Movimiento, Usuario, Elemento, Devolucion, Mantenimiento
 from utils import calcular_tiempo_transcurrido
 
 class HistoryPage(QWidget):
-    def __init__(self):
+    # AQUÍ ESTÁ LA CORRECCIÓN: Ahora recibe el usuario_actual
+    def __init__(self, usuario_actual):
         super().__init__()
+        self.usuario_actual = usuario_actual
         self.init_ui()
 
     def init_ui(self):
@@ -40,9 +42,9 @@ class HistoryPage(QWidget):
         layout.addLayout(search_layout)
 
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(7)
+        self.tabla.setColumnCount(8)
         self.tabla.setHorizontalHeaderLabels([
-            "Fecha / Hora", "Tipo", "ID Radio", "Usuario Sistema", "Observaciones", "Responsable / Movimiento", "Duración"
+            "Fecha / Hora", "Tipo", "ID Radio", "Usuario Sistema", "Observaciones", "Responsable / Movimiento", "Duración", "Acción"
         ])
         
         header = self.tabla.horizontalHeader()
@@ -53,6 +55,7 @@ class HistoryPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.Stretch)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
         
         self.tabla.setAlternatingRowColors(True)
         self.tabla.verticalHeader().setVisible(False)
@@ -99,7 +102,10 @@ class HistoryPage(QWidget):
                 usuario = db.query(Usuario).filter(Usuario.id == mov.usuario_sistema_id).first()
                 self.tabla.setItem(row_idx, 3, QTableWidgetItem(usuario.username if usuario else "Desconocido"))
                 
-                self.tabla.setItem(row_idx, 4, QTableWidgetItem(mov.observaciones or ""))
+                obs_mostrar = mov.observaciones or ""
+                if len(obs_mostrar) > 50:
+                    obs_mostrar = obs_mostrar[:47] + "..."
+                self.tabla.setItem(row_idx, 4, QTableWidgetItem(obs_mostrar))
                 
                 responsable_str = "-"
                 if mov.tipo_movimiento == 'entrega':
@@ -130,6 +136,46 @@ class HistoryPage(QWidget):
                         duracion_str = calcular_tiempo_transcurrido(mov.fecha_hora) + " (En taller)"
                         
                 self.tabla.setItem(row_idx, 6, QTableWidgetItem(duracion_str))
+
+                # --- RESTRICCIÓN DE ROLES ---
+                if mov.tipo_movimiento == 'mantenimiento' and self.usuario_actual.rol == 'Operativo':
+                    self.tabla.setItem(row_idx, 7, QTableWidgetItem("Restringido"))
+                else:
+                    btn_ver = QPushButton("👁")
+                    btn_ver.setStyleSheet("background: transparent; border: none; font-size: 16px; color: #003087;")
+                    btn_ver.clicked.connect(lambda checked=False, m_id=mov.id, m_tipo=mov.tipo_movimiento: self.mostrar_detalle(m_id, m_tipo))
+                    self.tabla.setCellWidget(row_idx, 7, btn_ver)
                 
+        finally:
+            db.close()
+
+    def mostrar_detalle(self, mov_id, tipo):
+        db = SessionLocal()
+        try:
+            mensaje = ""
+            if tipo == 'mantenimiento':
+                mant = db.query(Mantenimiento).filter(Mantenimiento.id == mov_id).first()
+                if mant:
+                    elemento = db.query(Elemento).filter(Elemento.id == mant.elemento_id).first()
+                    mensaje = f"🛠️ DETALLE DE MANTENIMIENTO\n\n"
+                    mensaje += f"📻 Radio: {elemento.codigo_unico}\n"
+                    mensaje += f"📅 Fecha Ingreso: {mant.fecha_hora.strftime('%d/%m/%Y %H:%M')}\n"
+                    if mant.fecha_fin:
+                        mensaje += f"📅 Fecha Salida: {mant.fecha_fin.strftime('%d/%m/%Y %H:%M')}\n"
+                    mensaje += f"\n📝 REGISTRO TÉCNICO:\n{mant.observaciones}"
+            else:
+                mov = db.query(Movimiento).filter(Movimiento.id == mov_id).first()
+                if mov:
+                    mensaje = f"📝 DETALLE DEL MOVIMIENTO\n\n"
+                    mensaje += f"Tipo: {mov.tipo_movimiento.capitalize()}\n"
+                    mensaje += f"Fecha: {mov.fecha_hora.strftime('%d/%m/%Y %H:%M')}\n\n"
+                    mensaje += f"Observaciones:\n{mov.observaciones or 'Ninguna'}"
+
+            if mensaje:
+                msg_box = QMessageBox(self)
+                msg_box.setWindowTitle("Detalle del Movimiento")
+                msg_box.setText(mensaje)
+                msg_box.setIcon(QMessageBox.Information)
+                msg_box.exec()
         finally:
             db.close()

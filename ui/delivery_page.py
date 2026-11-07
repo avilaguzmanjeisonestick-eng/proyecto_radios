@@ -138,28 +138,24 @@ class DeliveryPage(QWidget):
                 )
                 db.add(persona)
                 db.commit() # Guardamos para obtener el ID de la persona
-
             # 3. VALIDACIÓN: RN-ENT-01 (Máximo 3 radios por persona)
-            # Contamos cuántas entregas activas tiene esta persona (entregas sin devolución)
-            # Para hacerlo simple, contamos los elementos en estado 'Entregado' que pertenezcan a esta persona.
-            entregas_activas = db.query(Entrega).filter(
-                Entrega.persona_id == persona.id,
-                Entrega.estado_resultante == None # Asumiendo que no tiene devolución
-            ).count()
+            # Para hacerlo correctamente, buscamos las entregas que esta persona tiene 
+            # y que AÚN NO tienen una devolución asociada.
+            from models import Devolucion
             
-            # Nota técnica: Esta validación se puede optimizar, pero para el proyecto es perfecta.
-            # Como aún no hemos creado la tabla Devolucion, vamos a validar contando los radios
-            # que esta persona tiene actualmente (simulando la relación). 
-            # Para evitar errores ahora, haremos una validación básica de la BD:
+            # Obtenemos todos los IDs de las entregas de esta persona
+            entregas_persona = db.query(Entrega.id).filter(Entrega.persona_id == persona.id).all()
+            ids_entregas = [e.id for e in entregas_persona]
             
-            # Si la persona ya tiene 3 entregas registradas que no han sido devueltas...
-            # (Esta lógica se refinará cuando hagamos el módulo de devoluciones).
-            # Por ahora, solo contaremos cuántas entregas tiene en total.
-            total_entregas = db.query(Entrega).filter(Entrega.persona_id == persona.id).count()
+            # Contamos cuántas de esas entregas NO tienen una devolución
+            entregas_activas = 0
+            if ids_entregas:
+                entregas_activas = db.query(Entrega).filter(
+                    Entrega.id.in_(ids_entregas),
+                    ~Entrega.id.in_(db.query(Devolucion.entrega_id)) # Que NO esté en la tabla devoluciones
+                ).count()
             
-            # TRUCO TEMPORAL: Para que no falle el sistema mientras hacemos el módulo de devoluciones,
-            # solo validaremos que no tenga 3 entregas registradas en total. 
-            if total_entregas >= 3:
+            if entregas_activas >= 3:
                 QMessageBox.warning(self, "Límite Excedido", "Esta persona ya tiene 3 radios asignados (Límite máximo según RN-ENT-01).")
                 return
 

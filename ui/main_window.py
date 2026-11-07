@@ -15,10 +15,12 @@ from ui.maintenance_page import MaintenancePage
 from ui.users_page import UsersPage
 
 class MainWindow(QMainWindow):
-    def __init__(self, usuario_actual):
+    # Agregamos el callback para cerrar sesión
+    def __init__(self, usuario_actual, cerrar_sesion_callback):
         super().__init__()
         self.usuario_actual = usuario_actual
-        self.rol = usuario_actual.rol # Guardamos el rol para usarlo rápido
+        self.cerrar_sesion_callback = cerrar_sesion_callback
+        self.rol = usuario_actual.rol
         self.setWindowTitle("CENTINELA - Gestión de Radios")
         self.resize(1200, 800)
         
@@ -67,7 +69,6 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addWidget(self.btn_dashboard)
         
-        # El técnico no hace entregas ni devoluciones
         if self.rol in ['Operativo', 'Admin']:
             sidebar_layout.addWidget(self.btn_entrega)
             sidebar_layout.addWidget(self.btn_devolucion)
@@ -87,6 +88,24 @@ class MainWindow(QMainWindow):
             
             sidebar_layout.addWidget(self.btn_mantenimiento)
             sidebar_layout.addWidget(self.btn_usuarios)
+
+        # --- NUEVO BOTÓN DE CERRAR SESIÓN ---
+        self.btn_logout = QPushButton("🚪 Cerrar Sesión")
+        self.btn_logout.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545; 
+                color: white; 
+                border-radius: 4px; 
+                padding: 10px; 
+                font-weight: bold;
+                margin: 10px 15px;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        self.btn_logout.clicked.connect(self.procesar_logout)
+        sidebar_layout.addWidget(self.btn_logout)
 
         main_layout.addWidget(sidebar)
 
@@ -150,6 +169,10 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(content_area)
         self.cargar_tabla_inventario()
 
+    def procesar_logout(self):
+        # Aquí podríamos poner un mensaje de confirmación, pero lo haremos directo
+        self.cerrar_sesion_callback()
+
     def cambiar_pagina_desde_dashboard(self, index, title, btn_name):
         btn_map = {
             "btn_entrega": self.btn_entrega,
@@ -169,7 +192,6 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(title)
         header_layout.addStretch()
         
-        # Solo Admin y Técnico pueden agregar radios
         if self.rol in ['Admin', 'Tecnico']:
             btn_nuevo = QPushButton("+ Agregar Radio")
             btn_nuevo.setObjectName("primary_btn")
@@ -242,3 +264,4 @@ class MainWindow(QMainWindow):
             self.page_mantenimiento.cargar_tabla_mantenimiento()
         elif index == 6:
             self.page_usuarios.cargar_usuarios()
+            

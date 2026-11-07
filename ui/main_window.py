@@ -7,7 +7,7 @@ from database import SessionLocal
 from models import Elemento
 from ui.dialogs import DialogoNuevoRadio
 
-# Importamos todas las páginas de la aplicación
+from ui.dashboard_page import DashboardPage
 from ui.delivery_page import DeliveryPage
 from ui.return_page import ReturnPage
 from ui.history_page import HistoryPage
@@ -17,7 +17,7 @@ class MainWindow(QMainWindow):
     def __init__(self, usuario_actual):
         super().__init__()
         self.usuario_actual = usuario_actual
-        self.setWindowTitle("SECURADIO - Panel de Control")
+        self.setWindowTitle("CENTINELA - Gestión de Radios")
         self.resize(1200, 800)
         
         central_widget = QWidget()
@@ -34,33 +34,49 @@ class MainWindow(QMainWindow):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 20, 0, 20)
         
-        logo = QLabel("SECURADIO\nCONTROL DE ACTIVOS")
-        logo.setStyleSheet("color: white; font-weight: bold; font-size: 16px; padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);")
-        logo.setAlignment(Qt.AlignCenter)
-        sidebar_layout.addWidget(logo)
+        # RECUADRO DE USUARIO
+        user_frame = QFrame()
+        user_frame.setObjectName("user_frame")
+        user_layout = QVBoxLayout(user_frame)
+        user_layout.setContentsMargins(15, 15, 15, 15)
+        
+        lbl_user = QLabel(f"👤 {self.usuario_actual.username.upper()}")
+        lbl_user.setObjectName("user_label")
+        
+        lbl_rol = QLabel(f"Rol: {self.usuario_actual.rol}")
+        lbl_rol.setObjectName("role_label")
+        
+        user_layout.addWidget(lbl_user)
+        user_layout.addWidget(lbl_rol)
+        sidebar_layout.addWidget(user_frame)
 
-        # Botones del menú
+        # Sección Operación
+        lbl_op = QLabel("OPERACIÓN")
+        lbl_op.setStyleSheet("color: #7b93b5; font-size: 10px; font-weight: bold; margin-left: 20px; margin-top: 15px; background: transparent;")
+        sidebar_layout.addWidget(lbl_op)
+
         self.btn_dashboard = QPushButton("Inicio")
-        self.btn_inventario = QPushButton("Inventario")
         self.btn_entrega = QPushButton("Entregas")
         self.btn_devolucion = QPushButton("Devoluciones")
+        self.btn_inventario = QPushButton("Inventario")
         self.btn_historial = QPushButton("Historial")
-        self.btn_mantenimiento = QPushButton("Mantenimiento") # <-- NUEVO BOTÓN
         
         self.btn_dashboard.setProperty("active", "true")
 
-        # Agregar botones al layout
         sidebar_layout.addWidget(self.btn_dashboard)
-        sidebar_layout.addWidget(self.btn_inventario)
         sidebar_layout.addWidget(self.btn_entrega)
         sidebar_layout.addWidget(self.btn_devolucion)
+        sidebar_layout.addWidget(self.btn_inventario)
         sidebar_layout.addWidget(self.btn_historial)
-        sidebar_layout.addWidget(self.btn_mantenimiento)
         sidebar_layout.addStretch()
 
-        user_info = QLabel(f"Usuario: {self.usuario_actual.username}\nRol: {self.usuario_actual.rol}")
-        user_info.setStyleSheet("color: #a8bad6; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1);")
-        sidebar_layout.addWidget(user_info)
+        # Sección Sistema
+        lbl_sys = QLabel("SISTEMA")
+        lbl_sys.setStyleSheet("color: #7b93b5; font-size: 10px; font-weight: bold; margin-left: 20px; margin-top: 10px; background: transparent;")
+        sidebar_layout.addWidget(lbl_sys)
+        
+        self.btn_mantenimiento = QPushButton("Administración") 
+        sidebar_layout.addWidget(self.btn_mantenimiento)
 
         main_layout.addWidget(sidebar)
 
@@ -70,55 +86,60 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
+        # Topbar superior
         topbar = QFrame()
         topbar.setObjectName("topbar")
-        topbar.setFixedHeight(70)
+        topbar.setFixedHeight(60)
         topbar_layout = QHBoxLayout(topbar)
+        topbar_layout.setContentsMargins(30, 0, 30, 0)
         
-        self.page_title = QLabel("Panel de control")
-        self.page_title.setObjectName("page_title")
+        self.page_title = QLabel("Inicio")
+        self.page_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #172033;")
         topbar_layout.addWidget(self.page_title)
         topbar_layout.addStretch()
+        
+        lbl_fecha = QLabel("Lunes, 16 jun 2025 - 08:42")
+        lbl_fecha.setStyleSheet("color: #7b8493; font-size: 12px; margin-right: 15px;")
+        topbar_layout.addWidget(lbl_fecha)
+        
         content_layout.addWidget(topbar)
 
         self.stacked_widget = QStackedWidget()
         content_layout.addWidget(self.stacked_widget)
 
         # --- INSTANCIAR LAS PÁGINAS ---
-        self.page_inicio = self.create_placeholder("Métricas y Tarjetas de Inicio")
+        self.page_inicio = DashboardPage(self.usuario_actual, self.cambiar_pagina_desde_dashboard)
         self.page_inventario = self.create_inventory_page()
         self.page_entrega = DeliveryPage(self.usuario_actual)
         self.page_devolucion = ReturnPage(self.usuario_actual)
         self.page_historial = HistoryPage()
-        self.page_mantenimiento = MaintenancePage(self.usuario_actual) # <-- NUEVA PÁGINA
+        self.page_mantenimiento = MaintenancePage(self.usuario_actual)
 
-        # --- AGREGAR PÁGINAS AL STACK (Los índices 0 al 5) ---
-        self.stacked_widget.addWidget(self.page_inicio)         # Índice 0
-        self.stacked_widget.addWidget(self.page_inventario)     # Índice 1
-        self.stacked_widget.addWidget(self.page_entrega)        # Índice 2
-        self.stacked_widget.addWidget(self.page_devolucion)     # Índice 3
-        self.stacked_widget.addWidget(self.page_historial)      # Índice 4
-        self.stacked_widget.addWidget(self.page_mantenimiento)  # Índice 5
+        # --- AGREGAR PÁGINAS AL STACK ---
+        self.stacked_widget.addWidget(self.page_inicio)         # 0
+        self.stacked_widget.addWidget(self.page_inventario)     # 1
+        self.stacked_widget.addWidget(self.page_entrega)        # 2
+        self.stacked_widget.addWidget(self.page_devolucion)     # 3
+        self.stacked_widget.addWidget(self.page_historial)      # 4
+        self.stacked_widget.addWidget(self.page_mantenimiento)  # 5
 
         # --- CONEXIONES DE LOS BOTONES ---
-        self.btn_dashboard.clicked.connect(lambda: self.cambiar_pagina(0, "Panel de control", self.btn_dashboard))
-        self.btn_inventario.clicked.connect(lambda: self.cambiar_pagina(1, "Gestión de Inventario", self.btn_inventario))
-        self.btn_entrega.clicked.connect(lambda: self.cambiar_pagina(2, "Registrar nueva entrega", self.btn_entrega))
-        self.btn_devolucion.clicked.connect(lambda: self.cambiar_pagina(3, "Registrar devolución", self.btn_devolucion))
-        self.btn_historial.clicked.connect(lambda: self.cambiar_pagina(4, "Historial de movimientos", self.btn_historial))
-        self.btn_mantenimiento.clicked.connect(lambda: self.cambiar_pagina(5, "Gestión de Mantenimiento", self.btn_mantenimiento))
+        self.btn_dashboard.clicked.connect(lambda: self.cambiar_pagina(0, "Inicio", self.btn_dashboard))
+        self.btn_entrega.clicked.connect(lambda: self.cambiar_pagina(2, "Entregas", self.btn_entrega))
+        self.btn_devolucion.clicked.connect(lambda: self.cambiar_pagina(3, "Devoluciones", self.btn_devolucion))
+        self.btn_inventario.clicked.connect(lambda: self.cambiar_pagina(1, "Inventario", self.btn_inventario))
+        self.btn_historial.clicked.connect(lambda: self.cambiar_pagina(4, "Historial", self.btn_historial))
+        self.btn_mantenimiento.clicked.connect(lambda: self.cambiar_pagina(5, "Administración", self.btn_mantenimiento))
 
         main_layout.addWidget(content_area)
         self.cargar_tabla_inventario()
 
-    def create_placeholder(self, text):
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        lbl = QLabel(text)
-        lbl.setStyleSheet("font-size: 24px; color: #7b8493;")
-        lbl.setAlignment(Qt.AlignCenter)
-        layout.addWidget(lbl)
-        return widget
+    def cambiar_pagina_desde_dashboard(self, index, title, btn_name):
+        btn_map = {
+            "btn_entrega": self.btn_entrega,
+            "btn_devolucion": self.btn_devolucion
+        }
+        self.cambiar_pagina(index, title, btn_map.get(btn_name))
 
     def create_inventory_page(self):
         widget = QWidget()
@@ -160,19 +181,13 @@ class MainWindow(QMainWindow):
         try:
             elementos = db.query(Elemento).all()
             self.tabla.setRowCount(0)
-            
             for row_idx, elem in enumerate(elementos):
                 self.tabla.insertRow(row_idx)
                 self.tabla.setItem(row_idx, 0, QTableWidgetItem(elem.codigo_unico))
-                
                 item_estado = QTableWidgetItem(elem.estado)
-                if elem.estado == 'Disponible':
-                    item_estado.setForeground(Qt.darkGreen)
-                elif elem.estado == 'Entregado':
-                    item_estado.setForeground(Qt.darkYellow)
-                elif elem.estado == 'Mantenimiento':
-                    item_estado.setForeground(Qt.red)
-                    
+                if elem.estado == 'Disponible': item_estado.setForeground(Qt.darkGreen)
+                elif elem.estado == 'Entregado': item_estado.setForeground(Qt.darkYellow)
+                elif elem.estado == 'Mantenimiento': item_estado.setForeground(Qt.red)
                 self.tabla.setItem(row_idx, 1, item_estado)
                 self.tabla.setItem(row_idx, 2, QTableWidgetItem(elem.observaciones or ""))
         finally:
@@ -182,7 +197,8 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(index)
         self.page_title.setText(title)
         
-        # Lógica para resaltar el botón activo
+        if active_btn is None: return
+
         for btn in [self.btn_dashboard, self.btn_inventario, self.btn_entrega, 
                     self.btn_devolucion, self.btn_historial, self.btn_mantenimiento]:
             btn.setProperty("active", "false")
@@ -193,11 +209,11 @@ class MainWindow(QMainWindow):
         active_btn.style().unpolish(active_btn)
         active_btn.style().polish(active_btn)
 
-        # --- REFRESCAR TABLAS SEGÚN LA PÁGINA ---
-        if index == 1:
+        if index == 0:
+            self.page_inicio.cargar_datos()
+        elif index == 1:
             self.cargar_tabla_inventario()
         elif index == 4:
             self.page_historial.cargar_historial()
         elif index == 5:
             self.page_mantenimiento.cargar_tabla_mantenimiento()
-            

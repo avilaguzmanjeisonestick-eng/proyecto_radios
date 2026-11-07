@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt
 from datetime import datetime
 from database import SessionLocal
 from models import Elemento, Mantenimiento
+from utils import calcular_tiempo_transcurrido
+from ui.dialogs import DialogoBitacoraMantenimiento
 
 class MaintenancePage(QWidget):
     def __init__(self, usuario_actual):
@@ -26,99 +28,120 @@ class MaintenancePage(QWidget):
         subtitle.setStyleSheet("color: #7b8493; font-size: 14px;")
         layout.addWidget(subtitle)
 
-        # --- TABLA DE MANTENIMIENTO ---
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(4)
-        self.tabla.setHorizontalHeaderLabels(["ID Radio", "Fecha Ingreso", "Motivo", "Acción"])
+        self.tabla.setColumnCount(5)
+        self.tabla.setHorizontalHeaderLabels(["ID Radio", "Fecha Ingreso", "Tiempo en Taller", "Motivo / Causa", "Acciones"])
         
         header = self.tabla.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         
         self.tabla.setAlternatingRowColors(True)
         self.tabla.verticalHeader().setVisible(False)
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
         
         layout.addWidget(self.tabla)
-        
-        # Cargar datos iniciales
         self.cargar_tabla_mantenimiento()
 
     def cargar_tabla_mantenimiento(self):
         db = SessionLocal()
         try:
-            # Buscamos todos los elementos que estén en estado 'Mantenimiento'
             elementos = db.query(Elemento).filter(Elemento.estado == 'Mantenimiento').all()
             self.tabla.setRowCount(0)
             
             for row_idx, elem in enumerate(elementos):
                 self.tabla.insertRow(row_idx)
                 
-                # 1. ID del Radio
                 self.tabla.setItem(row_idx, 0, QTableWidgetItem(elem.codigo_unico))
                 
-                # 2. Buscar el último registro de mantenimiento para este radio
                 mant = db.query(Mantenimiento).filter(
                     Mantenimiento.elemento_id == elem.id
                 ).order_by(Mantenimiento.id.desc()).first()
                 
-                fecha_str = mant.fecha_hora.strftime('%d/%m/%Y %H:%M') if mant else "N/A"
-                motivo_str = mant.motivo if mant else "No registrado"
-                
-                self.tabla.setItem(row_idx, 1, QTableWidgetItem(fecha_str))
-                self.tabla.setItem(row_idx, 2, QTableWidgetItem(motivo_str))
-                
-                # 3. Botón de Acción (Finalizar Mantenimiento)
-                btn_finalizar = QPushButton("Habilitar Radio")
-                btn_finalizar.setStyleSheet("background-color: #2e944b; color: white; border-radius: 4px; padding: 6px;")
-                # Usamos una función lambda para pasar el ID del elemento al hacer clic
-                btn_finalizar.clicked.connect(lambda checked, e_id=elem.id: self.finalizar_mantenimiento(e_id))
-                
-                self.tabla.setCellWidget(row_idx, 3, btn_finalizar)
+                if mant:
+                    fecha_ingreso = mant.fecha_hora.strftime('%d/%m/%Y %H:%M')
+                    tiempo_str = calcular_tiempo_transcurrido(mant.fecha_hora)
+                    
+                    motivo_mostrar = mant.motivo
+                    if mant.observaciones and "Causa:" in mant.observaciones:
+                        partes = mant.observaciones.split(" | ")
+                        if len(partes) > 0:
+                            motivo_mostrar += f"\n({partes[0]})"
+
+                    self.tabla.setItem(row_idx, 1, QTableWidgetItem(fecha_ingreso))
+                    self.tabla.setItem(row_idx, 2, QTableWidgetItem(tiempo_str))
+                    self.tabla.setItem(row_idx, 3, QTableWidgetItem(motivo_mostrar))
+                    
+                    action_widget = QWidget()
+                    action_layout = QHBoxLayout(action_widget)
+                    action_layout.setContentsMargins(0, 0, 0, 0)
+                    action_layout.setSpacing(5)
+                    
+                    btn_ver = QPushButton("👁")
+                    btn_ver.setStyleSheet("background: transparent; border: none; font-size: 16px; color: #003087;") # SIN cursor: pointer
+                    btn_ver.clicked.connect(lambda checked=False, m_id=mant.id: self.abrir_bitacora(m_id))
+                    
+                    btn_habilitar = QPushButton("Habilitar")
+                    btn_habilitar.setStyleSheet("background-color: #28a745; color: white; border-radius: 4px; padding: 5px 10px; font-weight: bold;")
+                    btn_habilitar.clicked.connect(lambda checked=False, m_id=mant.id, e_id=elem.id: self.finalizar_mantenimiento(m_id, e_id))
+                    
+                    action_layout.addWidget(btn_ver)
+                    action_layout.addWidget(btn_habilitar)
+                    
+                    self.tabla.setCellWidget(row_idx, 4, action_widget)
                 
         finally:
             db.close()
 
-    def finalizar_mantenimiento(self, elemento_id):
-        # Confirmación antes de cambiar el estado
-        respuesta = QMessageBox.question(
-            self, "Confirmar", 
-            "¿Está seguro de que el radio ha sido reparado y está listo para volver a estar Disponible?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if respuesta == QMessageBox.No:
-            return
-
+    def abrir_bitacora(self, mantenimiento_id):
         db = SessionLocal()
         try:
-            radio = db.query(Elemento).filter(Elemento.id == elemento_id).first()
-            if not radio:
+            mant = db.query(Mantenimiento).filter(Mantenimiento.id == mantenimiento_id).first()
+            if not mant: return
+            
+            dialogo = DialogoBitacoraMantenimiento(mant, self)
+            if dialogo.exec():
+                self.cargar_tabla_mantenimiento()
+        finally:
+            db.close()
+
+    def finalizar_mantenimiento(self, mantenimiento_id, elemento_id):
+        db = SessionLocal()
+        try:
+            mant = db.query(Mantenimiento).filter(Mantenimiento.id == mantenimiento_id).first()
+            
+            if not mant.observaciones or "Bitácora:" not in mant.observaciones:
+                QMessageBox.warning(self, "Bitácora Requerida", "Debe registrar la bitácora del trabajo realizado antes de habilitar el radio.")
+                self.abrir_bitacora(mantenimiento_id)
                 return
 
-            # 1. Cambiar el estado del radio
-            radio.estado = 'Disponible'
-
-            # 2. Actualizar el registro de mantenimiento (fecha de fin y usuario)
-            mant = db.query(Mantenimiento).filter(
-                Mantenimiento.elemento_id == radio.id
-            ).order_by(Mantenimiento.id.desc()).first()
+            respuesta = QMessageBox.question(
+                self, "Confirmar", 
+                "¿Está seguro de que el radio ha sido reparado y está listo para volver a estar Disponible?",
+                QMessageBox.Yes | QMessageBox.No
+            )
             
-            if mant:
-                mant.fecha_fin = datetime.now()
-                mant.usuario_fin_id = self.usuario_actual.id
-                mant.observaciones = f"{mant.observaciones} | Finalizado por {self.usuario_actual.username}"
+            if respuesta == QMessageBox.No:
+                return
+
+            radio = db.query(Elemento).filter(Elemento.id == elemento_id).first()
+            if not radio: return
+
+            radio.estado = 'Disponible'
+            mant.fecha_fin = datetime.now()
+            mant.usuario_fin_id = self.usuario_actual.id
+            mant.observaciones += f" | Finalizado por: {self.usuario_actual.username}"
 
             db.commit()
             QMessageBox.information(self, "Éxito", f"El radio {radio.codigo_unico} ahora está Disponible.")
-            
-            # Recargar la tabla para que desaparezca el radio reparado
             self.cargar_tabla_mantenimiento()
 
         except Exception as e:
             db.rollback()
-            QMessageBox.critical(self, "Error", f"No se pudo finalizar el mantenimiento: {e}")
+            QMessageBox.critical(self, "Error", f"No se pudo finalizar: {e}")
         finally:
             db.close()
+            

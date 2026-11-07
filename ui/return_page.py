@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from datetime import datetime
 from database import SessionLocal
 from models import Elemento, Entrega, Devolucion, Mantenimiento, Persona
+from utils import calcular_tiempo_transcurrido
 
 class ReturnPage(QWidget):
     def __init__(self, usuario_actual):
@@ -24,7 +25,6 @@ class ReturnPage(QWidget):
         title.setStyleSheet("font-size: 22px; font-weight: bold; color: #10213c;")
         layout.addWidget(title)
 
-        # --- SECCIÓN 1: BUSCAR EQUIPO ---
         group_buscar = QGroupBox("1. Buscar Equipo Entregado")
         group_buscar.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #d5dbe5; border-radius: 5px; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
         layout_buscar = QHBoxLayout(group_buscar)
@@ -41,7 +41,6 @@ class ReturnPage(QWidget):
         layout_buscar.addWidget(btn_buscar)
         layout.addWidget(group_buscar)
 
-        # --- SECCIÓN 2: INFO DE ENTREGA ACTIVA (Oculta por defecto) ---
         self.frame_info = QFrame()
         self.frame_info.setStyleSheet("background-color: #f8f9fa; border: 1px solid #e1e5eb; border-radius: 5px; padding: 15px;")
         self.frame_info.setVisible(False)
@@ -53,19 +52,21 @@ class ReturnPage(QWidget):
         self.lbl_info_fecha = QLabel("Fecha de entrega: ")
         self.lbl_info_accesorios = QLabel("Accesorios: ")
         
+        self.lbl_info_tiempo = QLabel("Tiempo en préstamo: ")
+        self.lbl_info_tiempo.setStyleSheet("font-size: 15px; font-weight: bold; color: #d97706; margin-top: 5px;")
+        
         layout_info.addWidget(self.lbl_info_radio)
         layout_info.addWidget(self.lbl_info_persona)
         layout_info.addWidget(self.lbl_info_fecha)
         layout_info.addWidget(self.lbl_info_accesorios)
+        layout_info.addWidget(self.lbl_info_tiempo)
         layout.addWidget(self.frame_info)
 
-        # --- SECCIÓN 3: DETALLES DE DEVOLUCIÓN ---
         self.group_devolucion = QGroupBox("2. Detalles de la Devolución")
         self.group_devolucion.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #d5dbe5; border-radius: 5px; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
         self.group_devolucion.setVisible(False)
         layout_devolucion = QVBoxLayout(self.group_devolucion)
 
-        # Estado resultante
         layout_estado = QHBoxLayout()
         layout_estado.addWidget(QLabel("Estado del elemento al recibir:"))
         
@@ -82,14 +83,12 @@ class ReturnPage(QWidget):
         layout_estado.addStretch()
         layout_devolucion.addLayout(layout_estado)
 
-        # Observaciones
         self.input_obs_devolucion = QTextEdit()
-        self.input_obs_devolucion.setPlaceholderText("Describa el estado en que se recibe el equipo (Ej: 'Se recibe con la antena averiada')")
+        self.input_obs_devolucion.setPlaceholderText("Describa el estado en que se recibe el equipo")
         self.input_obs_devolucion.setMaximumHeight(80)
         layout_devolucion.addWidget(QLabel("Observaciones de devolución:"))
         layout_devolucion.addWidget(self.input_obs_devolucion)
 
-        # Motivo de mantenimiento (solo visible si se elige mantenimiento)
         self.input_motivo_mant = QLineEdit()
         self.input_motivo_mant.setPlaceholderText("Motivo del mantenimiento (Requerido si envía a mantenimiento)")
         self.input_motivo_mant.setVisible(False)
@@ -98,7 +97,6 @@ class ReturnPage(QWidget):
 
         layout.addWidget(self.group_devolucion)
 
-        # --- BOTÓN FINAL ---
         self.btn_procesar = QPushButton("Procesar Devolución")
         self.btn_procesar.setObjectName("primary_btn")
         self.btn_procesar.setStyleSheet("padding: 12px; font-size: 14px;")
@@ -131,7 +129,6 @@ class ReturnPage(QWidget):
                 self.ocultar_paneles()
                 return
 
-            # Buscar la entrega activa (la última entrega sin devolución)
             entregas = db.query(Entrega).filter(Entrega.elemento_id == radio.id).order_by(Entrega.id.desc()).all()
             
             entrega_activa = None
@@ -142,7 +139,7 @@ class ReturnPage(QWidget):
                     break
             
             if not entrega_activa:
-                QMessageBox.warning(self, "Error de Consistencia", "El radio dice 'Entregado' pero no tiene una entrega activa registrada. Revise la base de datos.")
+                QMessageBox.warning(self, "Error de Consistencia", "El radio dice 'Entregado' pero no tiene una entrega activa registrada.")
                 self.ocultar_paneles()
                 return
 
@@ -150,11 +147,13 @@ class ReturnPage(QWidget):
             self.entrega_activa = entrega_activa
             persona = db.query(Persona).filter(Persona.id == entrega_activa.persona_id).first()
 
-            # Mostrar información en la pantalla
+            tiempo_str = calcular_tiempo_transcurrido(entrega_activa.fecha_hora)
+
             self.lbl_info_radio.setText(f"Radio: {radio.codigo_unico}")
             self.lbl_info_persona.setText(f"Responsable: {persona.nombre} (CC: {persona.documento})")
             self.lbl_info_fecha.setText(f"Fecha de entrega: {entrega_activa.fecha_hora.strftime('%d/%m/%Y %H:%M')}")
             self.lbl_info_accesorios.setText(f"Accesorios: {entrega_activa.accesorios}")
+            self.lbl_info_tiempo.setText(f"⏱ Tiempo en préstamo: {tiempo_str}")
 
             self.frame_info.setVisible(True)
             self.group_devolucion.setVisible(True)
@@ -194,7 +193,6 @@ class ReturnPage(QWidget):
         try:
             nuevo_estado = 'Mantenimiento' if enviar_mantenimiento else 'Disponible'
             
-            # 1. Registrar la Devolución
             nueva_devolucion = Devolucion(
                 elemento_id=self.radio_encontrado.id,
                 usuario_sistema_id=self.usuario_actual.id,
@@ -206,12 +204,10 @@ class ReturnPage(QWidget):
             )
             db.add(nueva_devolucion)
 
-            # 2. ACTUALIZAR EL ESTADO DEL RADIO (Corrección clave)
             radio_db = db.query(Elemento).filter(Elemento.id == self.radio_encontrado.id).first()
             if radio_db:
                 radio_db.estado = nuevo_estado
 
-            # 3. Si va a mantenimiento, registrar el movimiento
             if enviar_mantenimiento:
                 nuevo_mant = Mantenimiento(
                     elemento_id=self.radio_encontrado.id,
@@ -225,7 +221,6 @@ class ReturnPage(QWidget):
             db.commit()
             QMessageBox.information(self, "Éxito", f"Devolución registrada. El radio ahora está en estado: {nuevo_estado}.")
             
-            # Limpiar todo
             self.input_buscar.clear()
             self.ocultar_paneles()
 

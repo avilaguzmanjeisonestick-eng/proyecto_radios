@@ -126,7 +126,7 @@ QProgressBar::chunk {
 }
 /* --- BOTÓN DE CERRAR SESIÓN --- */
 #btn_logout {
-    background-color: #dc3545;
+    background-color: #dfff00;
     color: white;
     border-radius: 4px;
     padding: 10px;
@@ -134,7 +134,7 @@ QProgressBar::chunk {
     margin: 10px 15px;
 }
 #btn_logout:hover {
-    background-color: #FFC200;
+    background-color: #dc3545;
 }
 """
 

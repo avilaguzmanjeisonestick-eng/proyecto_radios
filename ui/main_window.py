@@ -2,7 +2,8 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QPushButton, QStackedWidget, QFrame, 
                                QTableWidget, QTableWidgetItem, QHeaderView)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from datetime import datetime
 from database import SessionLocal
 from models import Elemento
 from ui.dialogs import DialogoNuevoRadio
@@ -15,13 +16,12 @@ from ui.maintenance_page import MaintenancePage
 from ui.users_page import UsersPage
 
 class MainWindow(QMainWindow):
-    # Agregamos el callback para cerrar sesión
     def __init__(self, usuario_actual, cerrar_sesion_callback):
         super().__init__()
         self.usuario_actual = usuario_actual
         self.cerrar_sesion_callback = cerrar_sesion_callback
         self.rol = usuario_actual.rol
-        self.setWindowTitle("CENTINELA - Gestión de Radios")
+        self.setWindowTitle("MESOAlogin - Gestión de Radios")
         self.resize(1200, 800)
         
         central_widget = QWidget()
@@ -38,13 +38,12 @@ class MainWindow(QMainWindow):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 20, 0, 20)
         
-        # Recuadro de Usuario
         user_frame = QFrame()
         user_frame.setObjectName("user_frame")
         user_layout = QVBoxLayout(user_frame)
         user_layout.setContentsMargins(15, 15, 15, 15)
         
-        lbl_user = QLabel(f"👤 {self.usuario_actual.username.upper()}")
+        lbl_user = QLabel(f"👮 {self.usuario_actual.username.upper()}")
         lbl_user.setObjectName("user_label")
         
         lbl_rol = QLabel(f"Rol: {self.rol}")
@@ -89,19 +88,21 @@ class MainWindow(QMainWindow):
             sidebar_layout.addWidget(self.btn_mantenimiento)
             sidebar_layout.addWidget(self.btn_usuarios)
 
-        # --- NUEVO BOTÓN DE CERRAR SESIÓN ---
+        # --- BOTÓN DE CERRAR SESIÓN (Estilo igual a los demás) ---
         self.btn_logout = QPushButton("🚪 Cerrar Sesión")
         self.btn_logout.setStyleSheet("""
             QPushButton {
-                background-color: #dc3545; 
-                color: white; 
-                border-radius: 4px; 
-                padding: 10px; 
-                font-weight: bold;
-                margin: 10px 15px;
+                background-color: #dfff00; 
+                color: #334155; 
+                text-align: left; 
+                padding: 10px 15px; 
+                font-size: 14px; 
+                border: none; 
+                margin: 4px 15px;
+                border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #c82333;
+                background-color: #FFCC33; 
             }
         """)
         self.btn_logout.clicked.connect(self.procesar_logout)
@@ -126,9 +127,10 @@ class MainWindow(QMainWindow):
         topbar_layout.addWidget(self.page_title)
         topbar_layout.addStretch()
         
-        lbl_fecha = QLabel("Lunes, 16 jun 2025 - 08:42")
-        lbl_fecha.setStyleSheet("color: #7b8493; font-size: 12px; margin-right: 15px;")
-        topbar_layout.addWidget(lbl_fecha)
+        # Reloj Dinámico
+        self.lbl_fecha = QLabel()
+        self.lbl_fecha.setStyleSheet("color: #7b8493; font-size: 12px; margin-right: 15px; font-weight: bold;")
+        topbar_layout.addWidget(self.lbl_fecha)
         
         content_layout.addWidget(topbar)
 
@@ -169,8 +171,26 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(content_area)
         self.cargar_tabla_inventario()
 
+        # --- INICIAR EL RELOJ ---
+        self.actualizar_reloj()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.actualizar_reloj)
+        self.timer.start(60000)
+
+    def actualizar_reloj(self):
+        ahora = datetime.now()
+        dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+        
+        dia_semana = dias[ahora.weekday()]
+        dia = ahora.day
+        mes = meses[ahora.month - 1]
+        anio = ahora.year
+        hora = ahora.strftime("%H:%M")
+        
+        self.lbl_fecha.setText(f"{dia_semana}, {dia} {mes} {anio} - {hora}")
+
     def procesar_logout(self):
-        # Aquí podríamos poner un mensaje de confirmación, pero lo haremos directo
         self.cerrar_sesion_callback()
 
     def cambiar_pagina_desde_dashboard(self, index, title, btn_name):
@@ -264,4 +284,3 @@ class MainWindow(QMainWindow):
             self.page_mantenimiento.cargar_tabla_mantenimiento()
         elif index == 6:
             self.page_usuarios.cargar_usuarios()
-            

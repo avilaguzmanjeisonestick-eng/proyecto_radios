@@ -9,7 +9,7 @@ from models import Elemento, Persona, Entrega, Usuario
 class DeliveryPage(QWidget):
     def __init__(self, usuario_actual):
         super().__init__()
-        self.usuario_actual = usuario_actual # Guardamos quién está logueado
+        self.usuario_actual = usuario_actual
         self.init_ui()
 
     def init_ui(self):
@@ -17,7 +17,6 @@ class DeliveryPage(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
 
-        # Título de la sección
         title = QLabel("Registrar Nueva Entrega")
         title.setStyleSheet("font-size: 22px; font-weight: bold; color: #10213c;")
         layout.addWidget(title)
@@ -56,16 +55,19 @@ class DeliveryPage(QWidget):
         group_detalles.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #d5dbe5; border-radius: 5px; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
         layout_detalles = QVBoxLayout(group_detalles)
 
-        # Checkboxes de accesorios
+        # Checkboxes de accesorios (AQUÍ ESTÁ LA NUEVA BATERÍA)
         layout_accesorios = QHBoxLayout()
         self.chk_clic = QCheckBox("Clic")
         self.chk_funda = QCheckBox("Funda")
         self.chk_antena = QCheckBox("Antena")
         self.chk_cargador = QCheckBox("Cargador")
+        self.chk_bateria = QCheckBox("Batería") # <-- NUEVO
+        
         layout_accesorios.addWidget(self.chk_clic)
         layout_accesorios.addWidget(self.chk_funda)
         layout_accesorios.addWidget(self.chk_antena)
         layout_accesorios.addWidget(self.chk_cargador)
+        layout_accesorios.addWidget(self.chk_bateria) # <-- NUEVO
         
         layout_detalles.addWidget(QLabel("Accesorios entregados:"))
         layout_detalles.addLayout(layout_accesorios)
@@ -105,20 +107,19 @@ class DeliveryPage(QWidget):
         self.chk_funda.setChecked(False)
         self.chk_antena.setChecked(False)
         self.chk_cargador.setChecked(False)
+        self.chk_bateria.setChecked(False) # <-- NUEVO
 
     def procesar_entrega(self):
         codigo = self.input_codigo_radio.text().strip()
         nombre = self.input_nombre.text().strip()
         cedula = self.input_cedula.text().strip()
 
-        # Validación básica de campos
         if not codigo or not nombre or not cedula:
             QMessageBox.warning(self, "Campos Incompletos", "El código del radio, nombre y cédula son obligatorios.")
             return
 
         db = SessionLocal()
         try:
-            # 1. VALIDACIÓN: ¿El radio existe y está disponible?
             radio = db.query(Elemento).filter(Elemento.codigo_unico == codigo).first()
             if not radio:
                 QMessageBox.warning(self, "Error", f"El radio con código '{codigo}' no existe en el inventario.")
@@ -127,7 +128,6 @@ class DeliveryPage(QWidget):
                 QMessageBox.warning(self, "Radio No Disponible", f"El radio está actualmente en estado: '{radio.estado}'. No se puede entregar.")
                 return
 
-            # 2. Buscar o crear a la persona
             persona = db.query(Persona).filter(Persona.documento == cedula).first()
             if not persona:
                 persona = Persona(
@@ -137,37 +137,33 @@ class DeliveryPage(QWidget):
                     dependencia=self.combo_dependencia.currentText()
                 )
                 db.add(persona)
-                db.commit() # Guardamos para obtener el ID de la persona
-            # 3. VALIDACIÓN: RN-ENT-01 (Máximo 3 radios por persona)
-            # Para hacerlo correctamente, buscamos las entregas que esta persona tiene 
-            # y que AÚN NO tienen una devolución asociada.
+                db.commit()
+
+            # Validación de máximo 3 radios
             from models import Devolucion
-            
-            # Obtenemos todos los IDs de las entregas de esta persona
             entregas_persona = db.query(Entrega.id).filter(Entrega.persona_id == persona.id).all()
             ids_entregas = [e.id for e in entregas_persona]
             
-            # Contamos cuántas de esas entregas NO tienen una devolución
             entregas_activas = 0
             if ids_entregas:
                 entregas_activas = db.query(Entrega).filter(
                     Entrega.id.in_(ids_entregas),
-                    ~Entrega.id.in_(db.query(Devolucion.entrega_id)) # Que NO esté en la tabla devoluciones
+                    ~Entrega.id.in_(db.query(Devolucion.entrega_id))
                 ).count()
             
             if entregas_activas >= 3:
                 QMessageBox.warning(self, "Límite Excedido", "Esta persona ya tiene 3 radios asignados (Límite máximo según RN-ENT-01).")
                 return
 
-            # 4. Armar el string de accesorios
+            # Armar string de accesorios
             accesorios = []
             if self.chk_clic.isChecked(): accesorios.append("Clic")
             if self.chk_funda.isChecked(): accesorios.append("Funda")
             if self.chk_antena.isChecked(): accesorios.append("Antena")
             if self.chk_cargador.isChecked(): accesorios.append("Cargador")
+            if self.chk_bateria.isChecked(): accesorios.append("Batería") # <-- NUEVO
             accesorios_str = ", ".join(accesorios) if accesorios else "Ninguno"
 
-            # 5. Registrar la entrega (Movimiento)
             nueva_entrega = Entrega(
                 elemento_id=radio.id,
                 usuario_sistema_id=self.usuario_actual.id,
@@ -177,18 +173,14 @@ class DeliveryPage(QWidget):
                 tipo_movimiento='entrega'
             )
             db.add(nueva_entrega)
-
-            # 6. Actualizar el estado del radio
             radio.estado = 'Entregado'
             
-            db.commit() # Guardar todos los cambios
-
+            db.commit()
             QMessageBox.information(self, "Éxito", f"Radio '{codigo}' entregado correctamente a {nombre}.")
             self.limpiar_formulario()
 
         except Exception as e:
-            db.rollback() # Si algo falla, deshacemos los cambios
+            db.rollback()
             QMessageBox.critical(self, "Error de Base de Datos", f"Ocurrió un error al guardar: {e}")
         finally:
             db.close()
-            

@@ -176,7 +176,7 @@ class DashboardPage(QWidget):
             mensaje = f"📋 RESUMEN DEL PRÉSTAMO\n\n"
             mensaje += f"Estado: {estado_txt}\n"
             mensaje += f"📻 Radio: {elemento.codigo_unico if elemento else 'N/A'}\n"
-            mensaje += f"👤 Funcionario: {persona.nombre if persona else 'N/A'}\n"
+            mensaje += f"👮 Funcionario: {persona.nombre if persona else 'N/A'}\n"
             mensaje += f"🪪 Documento: {persona.documento if persona else 'N/A'}\n"
             mensaje += f"🏢 Dependencia: {persona.dependencia if persona else 'N/A'}\n"
             mensaje += f"📞 Teléfono: {persona.telefono if persona else 'N/A'}\n\n"

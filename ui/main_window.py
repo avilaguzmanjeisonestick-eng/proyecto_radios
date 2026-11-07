@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt
 from database import SessionLocal
 from models import Elemento
 from ui.dialogs import DialogoNuevoRadio
+# --- NUEVA IMPORTACIÓN ---
+from ui.return_page import ReturnPage 
 
 class MainWindow(QMainWindow):
     def __init__(self, usuario_actual):
@@ -77,8 +79,11 @@ class MainWindow(QMainWindow):
         # Páginas
         self.page_inicio = self.create_placeholder("Métricas y Tarjetas de Inicio")
         self.page_inventario = self.create_inventory_page()
-        self.page_entrega = self.create_placeholder("Formulario de Entrega")
-        self.page_devolucion = self.create_placeholder("Formulario de Devolución")
+        self.page_entrega = self.create_placeholder("Formulario de Entrega") # (Aún no lo has reemplazado)
+        
+        # --- NUEVA PÁGINA DE DEVOLUCIÓN ---
+        self.page_devolucion = ReturnPage(self.usuario_actual) 
+        
         self.page_historial = self.create_placeholder("Tabla de Historial")
 
         self.stacked_widget.addWidget(self.page_inicio)
@@ -176,3 +181,10 @@ class MainWindow(QMainWindow):
         active_btn.setProperty("active", "true")
         active_btn.style().unpolish(active_btn)
         active_btn.style().polish(active_btn)
+
+        # --- ACTUALIZACIÓN AUTOMÁTICA DE LA TABLA ---
+        # Si el usuario hace clic en "Inventario" (índice 1), recargamos la tabla
+        # para ver los cambios de estado reflejados al instante.
+        if index == 1:
+            self.cargar_tabla_inventario()
+            

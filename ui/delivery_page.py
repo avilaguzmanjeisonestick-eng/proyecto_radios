@@ -43,7 +43,7 @@ class DeliveryPage(QWidget):
         self.input_cedula = QLineEdit()
         self.input_telefono = QLineEdit()
         self.combo_dependencia = QComboBox()
-        self.combo_dependencia.addItems(["Operaciones Norte", "Operaciones Centro", "Supervisión", "Escoltas", "CCTV"])
+        self.combo_dependencia.addItems(["Apoyo", "Vigilancia", "Supervisión", "Especialidades", "CAD"])
 
         layout_persona.addRow("Nombre completo:", self.input_nombre)
         layout_persona.addRow("Cédula:", self.input_cedula)

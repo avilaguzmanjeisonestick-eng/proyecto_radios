@@ -132,12 +132,10 @@ class ReturnPage(QWidget):
                 return
 
             # Buscar la entrega activa (la última entrega sin devolución)
-            # Buscamos todas las entregas de este radio de la más reciente a la más antigua
             entregas = db.query(Entrega).filter(Entrega.elemento_id == radio.id).order_by(Entrega.id.desc()).all()
             
             entrega_activa = None
             for e in entregas:
-                # Verificar si esta entrega ya tiene una devolución asociada
                 dev_existente = db.query(Devolucion).filter(Devolucion.entrega_id == e.id).first()
                 if not dev_existente:
                     entrega_activa = e
@@ -162,7 +160,6 @@ class ReturnPage(QWidget):
             self.group_devolucion.setVisible(True)
             self.btn_procesar.setVisible(True)
             
-            # Limpiar campos de devolución por si se hace una nueva búsqueda
             self.input_obs_devolucion.clear()
             self.input_motivo_mant.clear()
             self.radio_disponible.setChecked(True)
@@ -203,14 +200,16 @@ class ReturnPage(QWidget):
                 usuario_sistema_id=self.usuario_actual.id,
                 entrega_id=self.entrega_activa.id,
                 estado_resultante=nuevo_estado,
-                accesorios_devueltos=self.entrega_activa.accesorios, # Asumimos que devuelve lo mismo
+                accesorios_devueltos=self.entrega_activa.accesorios,
                 observaciones=obs,
                 tipo_movimiento='devolucion'
             )
             db.add(nueva_devolucion)
 
-            # 2. Actualizar estado del radio
-            self.radio_encontrado.estado = nuevo_estado
+            # 2. ACTUALIZAR EL ESTADO DEL RADIO (Corrección clave)
+            radio_db = db.query(Elemento).filter(Elemento.id == self.radio_encontrado.id).first()
+            if radio_db:
+                radio_db.estado = nuevo_estado
 
             # 3. Si va a mantenimiento, registrar el movimiento
             if enviar_mantenimiento:
@@ -235,4 +234,3 @@ class ReturnPage(QWidget):
             QMessageBox.critical(self, "Error", f"No se pudo registrar la devolución: {e}")
         finally:
             db.close()
-            

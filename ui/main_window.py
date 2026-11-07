@@ -6,10 +6,12 @@ from PySide6.QtCore import Qt
 from database import SessionLocal
 from models import Elemento
 from ui.dialogs import DialogoNuevoRadio
-# Importamos todas las páginas
+
+# Importamos todas las páginas de la aplicación
 from ui.delivery_page import DeliveryPage
 from ui.return_page import ReturnPage
 from ui.history_page import HistoryPage
+from ui.maintenance_page import MaintenancePage
 
 class MainWindow(QMainWindow):
     def __init__(self, usuario_actual):
@@ -37,19 +39,23 @@ class MainWindow(QMainWindow):
         logo.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(logo)
 
+        # Botones del menú
         self.btn_dashboard = QPushButton("Inicio")
         self.btn_inventario = QPushButton("Inventario")
         self.btn_entrega = QPushButton("Entregas")
         self.btn_devolucion = QPushButton("Devoluciones")
         self.btn_historial = QPushButton("Historial")
+        self.btn_mantenimiento = QPushButton("Mantenimiento") # <-- NUEVO BOTÓN
         
         self.btn_dashboard.setProperty("active", "true")
 
+        # Agregar botones al layout
         sidebar_layout.addWidget(self.btn_dashboard)
         sidebar_layout.addWidget(self.btn_inventario)
         sidebar_layout.addWidget(self.btn_entrega)
         sidebar_layout.addWidget(self.btn_devolucion)
         sidebar_layout.addWidget(self.btn_historial)
+        sidebar_layout.addWidget(self.btn_mantenimiento)
         sidebar_layout.addStretch()
 
         user_info = QLabel(f"Usuario: {self.usuario_actual.username}\nRol: {self.usuario_actual.rol}")
@@ -78,25 +84,29 @@ class MainWindow(QMainWindow):
         self.stacked_widget = QStackedWidget()
         content_layout.addWidget(self.stacked_widget)
 
-        # Páginas Reales
+        # --- INSTANCIAR LAS PÁGINAS ---
         self.page_inicio = self.create_placeholder("Métricas y Tarjetas de Inicio")
         self.page_inventario = self.create_inventory_page()
         self.page_entrega = DeliveryPage(self.usuario_actual)
         self.page_devolucion = ReturnPage(self.usuario_actual)
         self.page_historial = HistoryPage()
+        self.page_mantenimiento = MaintenancePage(self.usuario_actual) # <-- NUEVA PÁGINA
 
-        self.stacked_widget.addWidget(self.page_inicio)
-        self.stacked_widget.addWidget(self.page_inventario)
-        self.stacked_widget.addWidget(self.page_entrega)
-        self.stacked_widget.addWidget(self.page_devolucion)
-        self.stacked_widget.addWidget(self.page_historial)
+        # --- AGREGAR PÁGINAS AL STACK (Los índices 0 al 5) ---
+        self.stacked_widget.addWidget(self.page_inicio)         # Índice 0
+        self.stacked_widget.addWidget(self.page_inventario)     # Índice 1
+        self.stacked_widget.addWidget(self.page_entrega)        # Índice 2
+        self.stacked_widget.addWidget(self.page_devolucion)     # Índice 3
+        self.stacked_widget.addWidget(self.page_historial)      # Índice 4
+        self.stacked_widget.addWidget(self.page_mantenimiento)  # Índice 5
 
-        # Conexiones de los botones del menú
+        # --- CONEXIONES DE LOS BOTONES ---
         self.btn_dashboard.clicked.connect(lambda: self.cambiar_pagina(0, "Panel de control", self.btn_dashboard))
         self.btn_inventario.clicked.connect(lambda: self.cambiar_pagina(1, "Gestión de Inventario", self.btn_inventario))
         self.btn_entrega.clicked.connect(lambda: self.cambiar_pagina(2, "Registrar nueva entrega", self.btn_entrega))
         self.btn_devolucion.clicked.connect(lambda: self.cambiar_pagina(3, "Registrar devolución", self.btn_devolucion))
         self.btn_historial.clicked.connect(lambda: self.cambiar_pagina(4, "Historial de movimientos", self.btn_historial))
+        self.btn_mantenimiento.clicked.connect(lambda: self.cambiar_pagina(5, "Gestión de Mantenimiento", self.btn_mantenimiento))
 
         main_layout.addWidget(content_area)
         self.cargar_tabla_inventario()
@@ -173,7 +183,8 @@ class MainWindow(QMainWindow):
         self.page_title.setText(title)
         
         # Lógica para resaltar el botón activo
-        for btn in [self.btn_dashboard, self.btn_inventario, self.btn_entrega, self.btn_devolucion, self.btn_historial]:
+        for btn in [self.btn_dashboard, self.btn_inventario, self.btn_entrega, 
+                    self.btn_devolucion, self.btn_historial, self.btn_mantenimiento]:
             btn.setProperty("active", "false")
             btn.style().unpolish(btn)
             btn.style().polish(btn)
@@ -182,10 +193,11 @@ class MainWindow(QMainWindow):
         active_btn.style().unpolish(active_btn)
         active_btn.style().polish(active_btn)
 
-        # --- AQUÍ ESTÁ LO QUE BUSCABAS ---
-        # Refrescar la tabla de inventario si entramos a esa página
+        # --- REFRESCAR TABLAS SEGÚN LA PÁGINA ---
         if index == 1:
             self.cargar_tabla_inventario()
-        # Refrescar la tabla de historial si entramos a esa página
         elif index == 4:
             self.page_historial.cargar_historial()
+        elif index == 5:
+            self.page_mantenimiento.cargar_tabla_mantenimiento()
+            

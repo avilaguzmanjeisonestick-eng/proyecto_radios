@@ -2,7 +2,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                                QPushButton, QFrame, QMessageBox)
 from PySide6.QtCore import Qt, QTimer, QTime, QDate
-from PySide6.QtGui import QPainter, QColor, QPixmap, QRadialGradient, QFont, QPen
+from PySide6.QtGui import QPainter, QColor, QRadialGradient, QFont, QPen
 from database import SessionLocal
 from models import Usuario
 from security import verificar_password
@@ -11,12 +11,11 @@ class LoginWindow(QWidget):
     def __init__(self, on_login_success):
         super().__init__()
         self.on_login_success = on_login_success
-        self.setWindowTitle("MESOA Login")
+        self.setWindowTitle("MESOAlogin")
         self.resize(1024, 768)
 
         # --- LAYOUT PRINCIPAL ---
         layout = QVBoxLayout(self)
-        # Margen superior aumentado a 260 para dejar espacio al reloj y la fecha
         layout.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         layout.setContentsMargins(0, 260, 0, 0) 
 
@@ -35,7 +34,7 @@ class LoginWindow(QWidget):
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(12)
 
-        title = QLabel("MESOA Login\nControl de Radios")
+        title = QLabel("MESOAlogin\nGestión de Radios")
         title.setStyleSheet("font-size: 22px; font-weight: bold; color: #10213c; margin-bottom: 5px;")
         title.setAlignment(Qt.AlignCenter)
         
@@ -123,32 +122,29 @@ class LoginWindow(QWidget):
         finally:
             db.close()
 
-    # --- DISEÑO DEL FONDO (IMAGEN + RELOJ) ---
+    # --- DISEÑO DEL FONDO (SOLO RADAR Y RELOJ) ---
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Fondo
-        pixmap = QPixmap("fondo.jpg") 
+        # 1. Fondo con degradado radial
+        gradient = QRadialGradient(self.rect().center(), self.width() * 0.8)
+        gradient.setColorAt(0, QColor("#0a4694"))
+        gradient.setColorAt(1, QColor("#001d48"))
+        painter.fillRect(self.rect(), gradient)
 
-        if not pixmap.isNull():
-            scaled_pixmap = pixmap.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            x = (self.width() - scaled_pixmap.width()) // 2
-            y = (self.height() - scaled_pixmap.height()) // 2
-            painter.drawPixmap(x, y, scaled_pixmap)
-            painter.fillRect(self.rect(), QColor(0, 20, 60, 150)) 
-        else:
-            gradient = QRadialGradient(self.rect().center(), self.width() * 0.8)
-            gradient.setColorAt(0, QColor("#0a4694"))
-            gradient.setColorAt(1, QColor("#001d48"))
-            painter.fillRect(self.rect(), gradient)
+        # 2. Ondas de radar (Círculos)
+        painter.setPen(QPen(QColor(223, 255, 0, 40), 2))
+        center = self.rect().center()
+        for radius in range(150, max(self.width(), self.height()), 120):
+            painter.drawEllipse(center, radius, radius)
+            
+        # 3. Líneas cruzadas de radar
+        painter.setPen(QPen(QColor(40, 167, 69, 30), 2))
+        painter.drawLine(0, 0, self.width(), self.height())
+        painter.drawLine(0, self.height(), self.width(), 0)
 
-            painter.setPen(QPen(QColor(223, 255, 0, 40), 2))
-            center = self.rect().center()
-            for radius in range(150, max(self.width(), self.height()), 120):
-                painter.drawEllipse(center, radius, radius)
-
-        # --- DIBUJAR EL RELOJ Y LA FECHA ---
+        # --- 4. DIBUJAR EL RELOJ Y LA FECHA ---
         hora_actual = QTime.currentTime().toString("HH:mm:ss")
         fecha_actual = QDate.currentDate().toString("dddd, d 'de' MMMM 'de' yyyy")
 
@@ -158,9 +154,8 @@ class LoginWindow(QWidget):
         painter.setPen(QColor(255, 255, 255, 45)) 
         painter.drawText(0, 30, self.width(), 150, Qt.AlignHCenter | Qt.AlignTop, hora_actual)
 
-        # Fecha (un poco más abajo ahora)
+        # Fecha (un poco más abajo)
         font_fecha = QFont("Segoe UI", 24, QFont.Bold)
         painter.setFont(font_fecha)
         painter.setPen(QColor(223, 255, 0, 60)) 
-        # Cambiamos el Y de 160 a 185
         painter.drawText(0, 185, self.width(), 50, Qt.AlignHCenter | Qt.AlignTop, fecha_actual)

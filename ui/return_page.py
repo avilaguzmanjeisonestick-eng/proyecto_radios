@@ -1,12 +1,13 @@
 # ui/return_page.py
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QLineEdit, QPushButton, QGroupBox, QTextEdit, 
-                               QMessageBox, QRadioButton, QButtonGroup, QFrame)
+                               QRadioButton, QButtonGroup, QFrame)
 from PySide6.QtCore import Qt
 from datetime import datetime
 from database import SessionLocal
 from models import Elemento, Entrega, Devolucion, Mantenimiento, Persona
 from utils import calcular_tiempo_transcurrido
+from ui.dialogs import CustomDialog
 
 class ReturnPage(QWidget):
     def __init__(self, usuario_actual):
@@ -51,7 +52,6 @@ class ReturnPage(QWidget):
         self.lbl_info_persona = QLabel("Responsable: ")
         self.lbl_info_fecha = QLabel("Fecha de entrega: ")
         self.lbl_info_accesorios = QLabel("Accesorios: ")
-        
         self.lbl_info_tiempo = QLabel("Tiempo en préstamo: ")
         self.lbl_info_tiempo.setStyleSheet("font-size: 15px; font-weight: bold; color: #d97706; margin-top: 5px;")
         
@@ -90,7 +90,7 @@ class ReturnPage(QWidget):
         layout_devolucion.addWidget(self.input_obs_devolucion)
 
         self.input_motivo_mant = QLineEdit()
-        self.input_motivo_mant.setPlaceholderText("Motivo del mantenimiento (Requerido si envía a mantenimiento)")
+        self.input_motivo_mant.setPlaceholderText("Motivo del mantenimiento")
         self.input_motivo_mant.setVisible(False)
         self.radio_mantenimiento.toggled.connect(self.toggle_motivo_mantenimiento)
         layout_devolucion.addWidget(self.input_motivo_mant)
@@ -112,7 +112,8 @@ class ReturnPage(QWidget):
     def buscar_radio(self):
         codigo = self.input_buscar.text().strip()
         if not codigo:
-            QMessageBox.warning(self, "Error", "Ingrese un código para buscar.")
+            dialog = CustomDialog("Faltan datos", "Ingrese un código para buscar.", "error", self)
+            dialog.exec()
             return
 
         db = SessionLocal()
@@ -120,12 +121,14 @@ class ReturnPage(QWidget):
             radio = db.query(Elemento).filter(Elemento.codigo_unico == codigo).first()
             
             if not radio:
-                QMessageBox.warning(self, "No encontrado", "El radio no existe en el inventario.")
+                dialog = CustomDialog("No encontrado", "El radio no existe en el inventario.", "error", self)
+                dialog.exec()
                 self.ocultar_paneles()
                 return
             
             if radio.estado != 'Entregado':
-                QMessageBox.warning(self, "Error", f"El radio está en estado '{radio.estado}'. Solo se pueden devolver radios 'Entregados'.")
+                dialog = CustomDialog("Error", f"El radio está en estado '{radio.estado}'.\nSolo se pueden devolver radios 'Entregados'.", "error", self)
+                dialog.exec()
                 self.ocultar_paneles()
                 return
 
@@ -139,7 +142,8 @@ class ReturnPage(QWidget):
                     break
             
             if not entrega_activa:
-                QMessageBox.warning(self, "Error de Consistencia", "El radio dice 'Entregado' pero no tiene una entrega activa registrada.")
+                dialog = CustomDialog("Error de Consistencia", "El radio dice 'Entregado' pero no tiene una entrega activa registrada.", "error", self)
+                dialog.exec()
                 self.ocultar_paneles()
                 return
 
@@ -179,14 +183,16 @@ class ReturnPage(QWidget):
 
         obs = self.input_obs_devolucion.toPlainText().strip()
         if not obs:
-            QMessageBox.warning(self, "Faltan datos", "Las observaciones de devolución son obligatorias.")
+            dialog = CustomDialog("Faltan datos", "Las observaciones de devolución son obligatorias.", "error", self)
+            dialog.exec()
             return
 
         enviar_mantenimiento = self.radio_mantenimiento.isChecked()
         motivo = self.input_motivo_mant.text().strip()
 
         if enviar_mantenimiento and not motivo:
-            QMessageBox.warning(self, "Faltan datos", "Debe indicar el motivo del mantenimiento.")
+            dialog = CustomDialog("Faltan datos", "Debe indicar el motivo del mantenimiento.", "error", self)
+            dialog.exec()
             return
 
         db = SessionLocal()
@@ -219,13 +225,16 @@ class ReturnPage(QWidget):
                 db.add(nuevo_mant)
 
             db.commit()
-            QMessageBox.information(self, "Éxito", f"Devolución registrada. El radio ahora está en estado: {nuevo_estado}.")
+            
+            dialog = CustomDialog("Devolución Exitosa", f"El radio ahora está en estado:\n{nuevo_estado}", "exito", self)
+            dialog.exec()
             
             self.input_buscar.clear()
             self.ocultar_paneles()
 
         except Exception as e:
             db.rollback()
-            QMessageBox.critical(self, "Error", f"No se pudo registrar la devolución: {e}")
+            dialog = CustomDialog("Error", f"No se pudo registrar la devolución:\n{e}", "error", self)
+            dialog.exec()
         finally:
             db.close()

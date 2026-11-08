@@ -1,9 +1,12 @@
 # ui/users_page.py
+import os
+import shutil
+from datetime import datetime
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, 
-                               QHeaderView, QMessageBox, QComboBox, QInputDialog)
+                               QHeaderView, QMessageBox, QComboBox, QInputDialog, QFileDialog)
 from PySide6.QtCore import Qt
-from database import SessionLocal
+from database import SessionLocal, engine
 from models import Usuario
 from security import encriptar_password
 
@@ -17,9 +20,28 @@ class UsersPage(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
 
+        # Cabecera con título y botón de Backup
+        header_layout = QHBoxLayout()
+        
         title = QLabel("Gestión de Usuarios y Roles")
         title.setStyleSheet("font-size: 22px; font-weight: bold; color: #10213c;")
-        layout.addWidget(title)
+        header_layout.addWidget(title)
+        
+        header_layout.addStretch()
+        
+        # NUEVO BOTÓN DE BACKUP
+        btn_backup = QPushButton("💾 Hacer Copia de Seguridad")
+        btn_backup.setStyleSheet("""
+            QPushButton {
+                background-color: #003087; color: white; border-radius: 4px;
+                padding: 8px 15px; font-weight: bold; font-size: 13px;
+            }
+            QPushButton:hover { background-color: #00276e; }
+        """)
+        btn_backup.clicked.connect(self.hacer_backup)
+        header_layout.addWidget(btn_backup)
+        
+        layout.addLayout(header_layout)
 
         # Formulario de creación
         form_layout = QHBoxLayout()
@@ -59,6 +81,42 @@ class UsersPage(QWidget):
         layout.addWidget(self.tabla)
         self.cargar_usuarios()
 
+    def hacer_backup(self):
+        # Obtenemos la ruta exacta de la base de datos
+        db_path = engine.url.database
+        
+        if not os.path.exists(db_path):
+            QMessageBox.warning(self, "Error", "No se encontró el archivo de base de datos.")
+            return
+
+        # Generamos el nombre sugerido con la fecha y hora
+        fecha_hora = datetime.now().strftime("%Y%m%d_%H%M")
+        nombre_sugerido = f"backup_radios_{fecha_hora}.db"
+
+        # Abrimos el diálogo para que el usuario elija dónde guardarlo
+        ruta_guardar, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Guardar Copia de Seguridad", 
+            nombre_sugerido, 
+            "Archivos de Base de Datos (*.db)"
+        )
+
+        if ruta_guardar:
+            try:
+                # Copiamos el archivo
+                shutil.copy2(db_path, ruta_guardar)
+                QMessageBox.information(
+                    self, 
+                    "Copia Exitosa", 
+                    f"La copia de seguridad se ha guardado correctamente en:\n\n{ruta_guardar}"
+                )
+            except Exception as e:
+                QMessageBox.critical(
+                    self, 
+                    "Error", 
+                    f"No se pudo guardar la copia de seguridad:\n{e}"
+                )
+
     def crear_usuario(self):
         username = self.input_user.text().strip()
         password = self.input_pass.text().strip()
@@ -68,9 +126,8 @@ class UsersPage(QWidget):
             QMessageBox.warning(self, "Error", "Debe llenar todos los campos.")
             return
 
-        # --- NUEVA REGLA: SIN ESPACIOS EN EL USUARIO ---
         if " " in username:
-            QMessageBox.warning(self, "Error de Formato", "El nombre de usuario no puede contener espacios. Use guiones bajos (ej: jeison_avila).")
+            QMessageBox.warning(self, "Error de Formato", "El nombre de usuario no puede contener espacios.")
             return
 
         db = SessionLocal()
@@ -113,21 +170,18 @@ class UsersPage(QWidget):
                 else: item_estado.setForeground(Qt.red)
                 self.tabla.setItem(row_idx, 3, item_estado)
 
-                # Contenedor para los botones de acción
                 action_widget = QWidget()
                 action_layout = QHBoxLayout(action_widget)
                 action_layout.setContentsMargins(0, 0, 0, 0)
                 action_layout.setSpacing(5)
 
                 if u.username != 'admin':
-                    # Botón Restablecer Contraseña
                     btn_reset = QPushButton("🔑")
                     btn_reset.setToolTip("Restablecer Contraseña")
                     btn_reset.setStyleSheet("background-color: #f39c12; color: white; border-radius: 4px; padding: 5px 10px; font-weight: bold;")
                     btn_reset.clicked.connect(lambda checked=False, user_name=u.username: self.restablecer_password(user_name))
                     action_layout.addWidget(btn_reset)
 
-                    # Botón Activar/Desactivar
                     btn_estado = QPushButton("Desactivar" if u.activo else "Activar")
                     if u.activo:
                         btn_estado.setStyleSheet("background-color: #dc3545; color: white; border-radius: 4px; padding: 5px 10px; font-weight: bold;")
@@ -144,7 +198,6 @@ class UsersPage(QWidget):
             db.close()
 
     def restablecer_password(self, username):
-        # Pedimos la nueva contraseña temporal
         nueva_pass, ok = QInputDialog.getText(
             self, 
             "Restablecer Contraseña", 
@@ -182,4 +235,3 @@ class UsersPage(QWidget):
                 self.cargar_usuarios()
         finally:
             db.close()
-            

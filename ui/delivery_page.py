@@ -1,10 +1,11 @@
 # ui/delivery_page.py
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QLineEdit, QPushButton, QFormLayout, QGroupBox, 
-                               QCheckBox, QTextEdit, QMessageBox, QComboBox)
+                               QCheckBox, QTextEdit, QComboBox)
 from PySide6.QtCore import Qt
 from database import SessionLocal
-from models import Elemento, Persona, Entrega, Usuario
+from models import Elemento, Persona, Entrega, Devolucion
+from ui.dialogs import CustomDialog
 
 class DeliveryPage(QWidget):
     def __init__(self, usuario_actual):
@@ -21,7 +22,6 @@ class DeliveryPage(QWidget):
         title.setStyleSheet("font-size: 22px; font-weight: bold; color: #10213c;")
         layout.addWidget(title)
 
-        # --- SECCIÓN 1: ID DEL RADIO ---
         group_radio = QGroupBox("1. Identificación del Equipo")
         group_radio.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #d5dbe5; border-radius: 5px; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
         layout_radio = QVBoxLayout(group_radio)
@@ -32,7 +32,6 @@ class DeliveryPage(QWidget):
         layout_radio.addWidget(self.input_codigo_radio)
         layout.addWidget(group_radio)
 
-        # --- SECCIÓN 2: DATOS DEL FUNCIONARIO ---
         group_persona = QGroupBox("2. Datos del Funcionario")
         group_persona.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #d5dbe5; border-radius: 5px; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
         layout_persona = QFormLayout(group_persona)
@@ -50,37 +49,34 @@ class DeliveryPage(QWidget):
         layout_persona.addRow("Dependencia:", self.combo_dependencia)
         layout.addWidget(group_persona)
 
-        # --- SECCIÓN 3: ACCESORIOS Y OBSERVACIONES ---
         group_detalles = QGroupBox("3. Detalles de la Entrega")
         group_detalles.setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #d5dbe5; border-radius: 5px; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
         layout_detalles = QVBoxLayout(group_detalles)
 
-        # Checkboxes de accesorios (AQUÍ ESTÁ LA NUEVA BATERÍA)
         layout_accesorios = QHBoxLayout()
         self.chk_clic = QCheckBox("Clic")
         self.chk_funda = QCheckBox("Funda")
         self.chk_antena = QCheckBox("Antena")
         self.chk_cargador = QCheckBox("Cargador")
-        self.chk_bateria = QCheckBox("Batería") # <-- NUEVO
+        self.chk_bateria = QCheckBox("Batería")
         
         layout_accesorios.addWidget(self.chk_clic)
         layout_accesorios.addWidget(self.chk_funda)
         layout_accesorios.addWidget(self.chk_antena)
         layout_accesorios.addWidget(self.chk_cargador)
-        layout_accesorios.addWidget(self.chk_bateria) # <-- NUEVO
+        layout_accesorios.addWidget(self.chk_bateria)
         
         layout_detalles.addWidget(QLabel("Accesorios entregados:"))
         layout_detalles.addLayout(layout_accesorios)
 
         self.input_observaciones = QTextEdit()
-        self.input_observaciones.setPlaceholderText("Escriba aquí cualquier observación relevante (estado del equipo, novedades, etc.)")
+        self.input_observaciones.setPlaceholderText("Escriba aquí cualquier observación relevante...")
         self.input_observaciones.setMaximumHeight(80)
         layout_detalles.addWidget(QLabel("Observaciones:"))
         layout_detalles.addWidget(self.input_observaciones)
         
         layout.addWidget(group_detalles)
 
-        # --- BOTONES DE ACCIÓN ---
         layout_botones = QHBoxLayout()
         layout_botones.addStretch()
         
@@ -107,7 +103,7 @@ class DeliveryPage(QWidget):
         self.chk_funda.setChecked(False)
         self.chk_antena.setChecked(False)
         self.chk_cargador.setChecked(False)
-        self.chk_bateria.setChecked(False) # <-- NUEVO
+        self.chk_bateria.setChecked(False)
 
     def procesar_entrega(self):
         codigo = self.input_codigo_radio.text().strip()
@@ -115,35 +111,35 @@ class DeliveryPage(QWidget):
         cedula = self.input_cedula.text().strip()
 
         if not codigo or not nombre or not cedula:
-            QMessageBox.warning(self, "Campos Incompletos", "El código del radio, nombre y cédula son obligatorios.")
+            dialog = CustomDialog("Campos Incompletos", "El código del radio, nombre y cédula son obligatorios.", "error", self)
+            dialog.exec()
             return
 
         db = SessionLocal()
         try:
             radio = db.query(Elemento).filter(Elemento.codigo_unico == codigo).first()
             if not radio:
-                QMessageBox.warning(self, "Error", f"El radio con código '{codigo}' no existe en el inventario.")
+                dialog = CustomDialog("Error de Inventario", f"El radio con código '{codigo}' no existe.", "error", self)
+                dialog.exec()
                 return
+                
             if radio.estado != 'Disponible':
-                QMessageBox.warning(self, "Radio No Disponible", f"El radio está actualmente en estado: '{radio.estado}'. No se puede entregar.")
+                dialog = CustomDialog("Radio No Disponible", f"El radio está en estado: '{radio.estado}'.\nNo se puede entregar.", "error", self)
+                dialog.exec()
                 return
 
             persona = db.query(Persona).filter(Persona.documento == cedula).first()
             if not persona:
                 persona = Persona(
-                    nombre=nombre,
-                    documento=cedula,
+                    nombre=nombre, documento=cedula,
                     telefono=self.input_telefono.text().strip(),
                     dependencia=self.combo_dependencia.currentText()
                 )
                 db.add(persona)
                 db.commit()
 
-            # Validación de máximo 3 radios
-            from models import Devolucion
             entregas_persona = db.query(Entrega.id).filter(Entrega.persona_id == persona.id).all()
             ids_entregas = [e.id for e in entregas_persona]
-            
             entregas_activas = 0
             if ids_entregas:
                 entregas_activas = db.query(Entrega).filter(
@@ -152,16 +148,16 @@ class DeliveryPage(QWidget):
                 ).count()
             
             if entregas_activas >= 3:
-                QMessageBox.warning(self, "Límite Excedido", "Esta persona ya tiene 3 radios asignados (Límite máximo según RN-ENT-01).")
+                dialog = CustomDialog("Límite Excedido", "Esta persona ya tiene 3 radios asignados.", "error", self)
+                dialog.exec()
                 return
 
-            # Armar string de accesorios
             accesorios = []
             if self.chk_clic.isChecked(): accesorios.append("Clic")
             if self.chk_funda.isChecked(): accesorios.append("Funda")
             if self.chk_antena.isChecked(): accesorios.append("Antena")
             if self.chk_cargador.isChecked(): accesorios.append("Cargador")
-            if self.chk_bateria.isChecked(): accesorios.append("Batería") # <-- NUEVO
+            if self.chk_bateria.isChecked(): accesorios.append("Batería")
             accesorios_str = ", ".join(accesorios) if accesorios else "Ninguno"
 
             nueva_entrega = Entrega(
@@ -174,13 +170,15 @@ class DeliveryPage(QWidget):
             )
             db.add(nueva_entrega)
             radio.estado = 'Entregado'
-            
             db.commit()
-            QMessageBox.information(self, "Éxito", f"Radio '{codigo}' entregado correctamente a {nombre}.")
+            
+            dialog = CustomDialog("Entrega Exitosa", f"El radio '{codigo}' fue entregado correctamente a:\n{nombre}", "exito", self)
+            dialog.exec()
             self.limpiar_formulario()
 
         except Exception as e:
             db.rollback()
-            QMessageBox.critical(self, "Error de Base de Datos", f"Ocurrió un error al guardar: {e}")
+            dialog = CustomDialog("Error de Base de Datos", f"Ocurrió un error: {e}", "error", self)
+            dialog.exec()
         finally:
             db.close()
